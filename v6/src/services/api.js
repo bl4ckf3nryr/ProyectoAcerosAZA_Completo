@@ -2,7 +2,7 @@
  * Cliente API para el Sistema de Monitoreo de Trefilado (Aceros AZA) — JavaScript puro
  */
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_BACKEND_URL || '/api';
 
 export function getAuthToken() {
   return localStorage.getItem('aza_auth_token');
