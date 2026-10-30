@@ -1,0 +1,8 @@
+{
+  "name": "ProyectoIntegrado - Aceros AZA",
+  "description": "Sistema industrial de monitoreo continuo, trazabilidad e inspección de ángulo de trefilado con base de datos SQLite embebida, control de acceso por roles y dashboard analítico tipo Power BI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

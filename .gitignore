@@ -1,0 +1,38 @@
+# ==========================================
+# .gitignore definitivo - Proyecto Aceros AZA
+# ==========================================
+
+# Dependencias (NUNCA subir node_modules)
+node_modules/
+package-lock.json
+
+# Entorno y secretos
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Builds y compilados
+dist/
+build/
+coverage/
+
+# Base de Datos (Permitimos subir el .db para la demo en Render)
+db/*.db-journal
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema Operativo
+.DS_Store
+Thumbs.db
+
+# Editores de Código
+.vscode/
+.idea/
+*.swp
+
+# Archivos temporales de Python
+*.pyc
+__pycache__/
