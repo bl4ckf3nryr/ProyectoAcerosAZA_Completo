@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from './backend/config/db.js';
@@ -19,6 +20,7 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
+  app.use(cors());
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
@@ -57,14 +59,15 @@ async function startServer() {
     });
     app.use(vite.middlewares);
     console.log('[SISTEMA] Vite montado en Express en modo desarrollo (JavaScript puro).');
-  } else {
-    const distPath = path.resolve(__dirname, 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.resolve(distPath, 'index.html'));
-    });
-    console.log('[SISTEMA] Sirviendo frontend estático desde /dist.');
-  }
+  } 
+  // else {
+  //  const distPath = path.resolve(__dirname, 'dist');
+  //  app.use(express.static(distPath));
+  //  app.get('*', (_req, res) => {
+  //    res.sendFile(path.resolve(distPath, 'index.html'));
+  //  });
+  //  console.log('[SISTEMA] Sirviendo frontend estático desde /dist.');
+  // }
 
   app.listen(PORT, () => {
     console.log(`[SISTEMA] Servidor corriendo en http://localhost:${PORT}`);
