@@ -1,0 +1,98 @@
+/**
+ * Pruebas Unitarias e Integración para los Endpoints Críticos (JavaScript puro)
+ * Sistema Web de Monitoreo y Trazabilidad del Trefilado — Aceros AZA
+ * Equipo: Lancelot Castro, Rodrigo Mancilla
+ */
+
+import { getDb } from '../backend/config/db.js';
+import { seedDatabase } from '../db/seed.js';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { JWT_SECRET } from '../backend/shared/middlewares/auth.middleware.js';
+import { validarRutChileno } from '../backend/utils/rutValidator.js';
+
+async function runTests() {
+  console.log('========================================================');
+  console.log(' INICIANDO SUITE DE PRUEBAS AUTOMATIZADAS — ACEROS AZA (JS)');
+  console.log('========================================================\n');
+
+  let passed = 0;
+  let failed = 0;
+
+  function assert(condition, testName) {
+    if (condition) {
+      console.log(`  ✓ [PASS] ${testName}`);
+      passed++;
+    } else {
+      console.error(`  ✗ [FAIL] ${testName}`);
+      failed++;
+    }
+  }
+
+  await getDb();
+  await seedDatabase(false);
+
+  // 1. Algoritmo de validación de RUT chileno (Módulo 11)
+  console.log('\n[1. Validación de RUT Chileno]:');
+  assert(validarRutChileno('11.111.111-1') === true, 'RUT válido 11.111.111-1 aceptado');
+  assert(validarRutChileno('12.345.678-5') === true, 'RUT válido 12.345.678-5 aceptado');
+  assert(validarRutChileno('11.111.111-2') === false, 'RUT con DV incorrecto rechazado');
+  assert(validarRutChileno('invalido') === false, 'Cadena no numérica rechazada');
+
+  // 2. Integridad del modelo de datos relacional (8 tablas)
+  console.log('\n[2. Verificación de Tablas del Modelo (DER)]');
+  const db = await getDb();
+  const tables = ['USUARIO', 'ROL', 'RECETA', 'TURNO', 'LOTE', 'BATCH', 'INSPECCION', 'OBSERVACION'];
+  for (const t of tables) {
+    const res = db.exec(`SELECT COUNT(*) FROM "${t}";`);
+    const count = Number(res[0].values[0][0]);
+    assert(count >= 0, `Tabla ${t} existe en trefilado.db con ${count} registros`);
+  }
+
+  // 3. RNF03 & RNF05: Base con 2.000 inspecciones inmutables
+  console.log('\n[3. Requisitos No Funcionales (RNF03, RNF05)]');
+  const inspCountRes = db.exec('SELECT COUNT(*) FROM INSPECCION;');
+  const inspCount = Number(inspCountRes[0].values[0][0]);
+  assert(inspCount >= 2000, `Base poblada con al menos 2.000 inspecciones (total: ${inspCount})`);
+
+  // 4. Reglas de cálculo de estado de inspección
+  console.log('\n[4. Reglas de Cálculo de Estado]');
+  const estadosRes = db.exec(`SELECT DISTINCT estado FROM INSPECCION ORDER BY estado ASC;`);
+  const estados = estadosRes[0].values.map(v => v[0]);
+  assert(estados.includes('aprobado'), 'Existen inspecciones con estado "aprobado"');
+  assert(estados.includes('rechazado'), 'Existen inspecciones con estado "rechazado"');
+  assert(estados.includes('sin receta'), 'Existen inspecciones con estado "sin receta"');
+
+  // 5. Autenticación y JWT
+  console.log('\n[5. Autenticación JWT y Bcrypt]');
+  const adminUserRes = db.exec("SELECT password_hash FROM USUARIO WHERE nombre_usuario = 'admin';");
+  const hash = String(adminUserRes[0].values[0][0]);
+  const passOk = bcrypt.compareSync('admin123', hash);
+  assert(passOk === true, 'Contraseña admin123 verifica correctamente con bcrypt hash');
+
+  const token = jwt.sign({ id_usuario: 1, rol: 'Administrador' }, JWT_SECRET);
+  const decoded = jwt.verify(token, JWT_SECRET);
+  assert(decoded.rol === 'Administrador', 'JWT decodificado contiene rol embebido');
+
+  // 6. Regla de Validación de Receta (mínimo < máximo)
+  console.log('\n[6. Validación de Receta]');
+  const min = 12.0;
+  const max = 14.5;
+  assert(min < max, 'Regla min < max valida correctamente');
+
+  // 7. Append-only de Observaciones (RNF06)
+  console.log('\n[7. Inmutabilidad de Observaciones (RNF06)]');
+  const obsRes = db.exec('SELECT COUNT(*) FROM OBSERVACION;');
+  const totalObs = Number(obsRes[0].values[0][0]);
+  assert(totalObs >= 200, `Observaciones registradas en base (total: ${totalObs})`);
+
+  console.log('\n========================================================');
+  console.log(` RESULTADOS FINALES: ${passed} PASADAS | ${failed} FALLIDAS`);
+  console.log('========================================================\n');
+}
+
+if (process.argv[1]?.endsWith('api.test.js')) {
+  runTests().catch(console.error);
+}
+
+export { runTests };

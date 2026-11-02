@@ -3,7 +3,7 @@
 **Proyecto Integrado de Titulación / Ingeniería de Software**  
 **Empresa Patrocinante:** Aceros AZA S.A.  
 **Institución:** INACAP  
-**Equipo de Desarrollo:** Lancelot Castro & Rodrigo Mancilla  
+**Equipo de Desarrollo:** Lancelot Castro  
 **Estado:** Funcional / Listo para Despliegue (Local y PaaS)  
 **Lenguaje y Plataforma:** JavaScript Puro (ESM / Node.js 20+ / React 19) — *Sin TypeScript*
 
@@ -18,6 +18,16 @@ El **Sistema Web de Monitoreo y Trazabilidad del Trefilado** es una plataforma i
 2. **Trazabilidad Histórica (Vista Supervisor):** Filtros combinables sobre más de 2.000 inspecciones con capacidad de anexar observaciones técnicas inmutables.
 3. **Analítica Avanzada (Dashboard BI):** Slicers interactivos, cross-filtering automático, bandas de tolerancia, histograma de dispersión y drill-down temporal.
 4. **Gobierno y Control (Vista Administrador):** Control de usuarios con RBAC estricto, gestión de recetas versionadas por vigencia y **Explorador de Base de Datos SQLite embebido en la web** para auditoría directa del motor relacional.
+
+### Historial de Iteraciones del Proyecto
+Este repositorio contiene el historial completo de la evolución del sistema, demostrando un proceso de desarrollo iterativo y mejora continua:
+- **`v1` (El Origen):** Implementación inicial utilizando TypeScript y Bun como gestor de paquetes.
+- **`v2` a `v3` (Alineación Técnica):** Migración completa a JavaScript puro y estandarización del gestor a npm, en estricta conformidad con el stack declarado en el informe ES1.
+- **`v4` (Corrección de Bugs):** Solución del problema de ordenamiento en la consulta de "Última Inspección".
+- **`v5` (Seguridad y Autenticación):** Implementación del flujo funcional de recuperación de contraseña con tokens criptográficos.
+- **`v6` (Gobierno y RBAC):** Creación del Panel de Administración exclusivo (Gestión de Recetas, Usuarios y Explorador de BD).
+- **`v7` a `v8` (UX/UI):** Implementación y posterior corrección integral del sistema de temas Claro/Oscuro, solucionando problemas de contraste.
+- **`v9` (Capa de Defensa en Profundidad):** Sanitización y enmascaramiento del campo `password_hash` en el Explorador de BD. **Esta es la versión desplegada en la nube para la evaluación ES3.**
 
 ---
 
@@ -200,6 +210,12 @@ Ubicado en la pestaña **"Explorador BD"**, este módulo proporciona una interfa
 - **Visualizador de filas:** Tabla interactiva con paginación de registros reales.
 - **Consola SQL Segura:** Permite escribir y ejecutar consultas `SELECT` directas con medición de tiempo de ejecución en milisegundos, limitación automática a 100 filas y bloqueo estricto de cualquier comando destructivo (`INSERT`, `UPDATE`, `DELETE`, `DROP`).
 
+### Seguridad y Protección de Datos Sensibles (Capa de Defensa en Profundidad)
+Para cumplir con las normativas de privacidad y evitar la fuga de información crítica, se implementó un mecanismo de **sanitización de datos sensibles** en el backend:
+1. **Enmascaramiento de Credenciales:** Tanto en la vista previa de la tabla `USUARIO` como en la consola SQL personalizada, el campo `password_hash` (que contiene el hash bcrypt) es interceptado y reemplazado por una insignia de seguridad con el texto **`[OCULTO POR SEGURIDAD]`**.
+2. **Aislamiento de la Regla:** Esta política de censura aplica únicamente al campo sensible de la tabla `USUARIO`. Las demás tablas (Inspecciones, Recetas, Observaciones, etc.) se muestran con su contenido completo para fines de auditoría operacional.
+3. **Protección en Frontend:** La interfaz renderiza el texto censurado con un estilo visual en ámbar (`bg-amber-500/15 text-amber-700 dark:text-amber-400`), notificando al administrador que el campo existe en el esquema SQLite pero su lectura está restringida por política de seguridad.
+
 ---
 
 ## 10. Flujo Real de Recuperación de Contraseña (Tokens en BD y Seguridad)
@@ -257,4 +273,4 @@ El sistema cuenta con un conmutador de tema visual accesible tanto desde la barr
 ---
 
 **Aceros AZA S.A. — INACAP 2026**  
-*Lancelot Castro & Rodrigo Mancilla*
+*Lancelot Castro*
