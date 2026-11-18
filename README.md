@@ -27,7 +27,8 @@ Este repositorio contiene el historial completo de la evolución del sistema, de
 - **`v5` (Seguridad y Autenticación):** Implementación del flujo funcional de recuperación de contraseña con tokens criptográficos.
 - **`v6` (Gobierno y RBAC):** Creación del Panel de Administración exclusivo (Gestión de Recetas, Usuarios y Explorador de BD).
 - **`v7` a `v8` (UX/UI):** Implementación y posterior corrección integral del sistema de temas Claro/Oscuro, solucionando problemas de contraste.
-- **`v9` (Capa de Defensa en Profundidad):** Sanitización y enmascaramiento del campo `password_hash` en el Explorador de BD. **Esta es la versión desplegada en la nube para la evaluación ES3.**
+- **`v9` (Capa de Defensa en Profundidad):** Sanitización y enmascaramiento del campo `password_hash` en el Explorador de BD.
+- **`v10` (Feedback del Cliente):** Se agregó el flujo de aprobación/rechazo de observaciones y el formulario de creación para Operadores, además de la limpieza visual de la interfaz. **Esta es la versión desplegada en la nube para la evaluación ES3.**
 
 ---
 
@@ -68,7 +69,7 @@ El esquema relacional implementado en `trefilado.db` cumple rigurosamente con la
 5. **`BATCH`**: Sub-lotes por bobina de trefilado (exactamente 4 batches por lote, FK `id_lote`).
 6. **`RECETA`**: Parámetros de tolerancia (`limite_minimo`, `limite_maximo`), `vigente_desde`, `vigente_hasta`. Restricción `CHECK (limite_minimo < limite_maximo)`. Versionado temporal inmutable.
 7. **`INSPECCION`**: Medición de ángulo (`angulo` REAL), `estado` (`aprobado`, `rechazado`, `sin receta`). **Campo calculado y almacenado en inserción, inmutable (sin UPDATE ni DELETE)**.
-8. **`OBSERVACION`**: Bitácora técnica anexable (`texto`, `fecha_hora`, FK `id_inspeccion`, FK `id_usuario`). **Append-only (solo se agregan, nunca se modifican ni eliminan)**.
+8. **`OBSERVACION`**: Bitácora técnica anexable (`texto`, `fecha_hora`, FK `id_inspeccion`, FK `id_usuario`, `estado` TEXT DEFAULT `'pendiente'` CHECK IN (`'pendiente'`, `'aprobada'`, `'rechazada'`)). **Append-only (solo se agregan, nunca se modifican ni eliminan)**. El campo `estado` permite el flujo de validación por parte del Supervisor.
 
 ### Índices de Rendimiento Creados:
 - `idx_inspeccion_fecha_lote`: Índice compuesto `(fecha_hora, id_lote)` en `INSPECCION`.
@@ -87,7 +88,7 @@ El esquema relacional implementado en `trefilado.db` cumple rigurosamente con la
 | **CU3** | Consultar Último Resultado | Vista Operador con auto-refresh (2s/3s/5s/10s), medidor de tolerancia y franja distintiva para *Sin Receta*. |
 | **CU4** | Consultar Histórico | Tabla paginada con filtros combinables (fecha, lote, receta, estado, turno) y exportación CSV. |
 | **CU5** | Visualizar Dashboard Interactivo | Dashboard BI con KPIs, gráfico de tendencia con zoom, producción por receta, cross-filtering y bookmarks. |
-| **CU6** | Registrar Observación | Registro append-only asociado a inspección y usuario autenticado. |
+| **CU6** | Registrar y Aprobar Observación | Flujo bidireccional: el Operador crea observaciones desde su vista (estado `pendiente`); el Supervisor las revisa y ejecuta la aprobación o rechazo mediante `PUT /api/observaciones/:id/estado`. Registro append-only. |
 | **CU7** | Gestionar Recetas | CRUD con validación `mínimo < máximo`, versionado temporal (`vigente_hasta = now`). |
 | **CU8** | Gestionar Usuarios | CRUD con validación de RUT chileno en JS, roles únicos y toggle de habilitación/desbloqueo. |
 | **RNF01** | Autenticación JWT + Bcrypt | Tokens firmados con rol embebido en payload; contraseñas con salt round 10. |
@@ -269,6 +270,40 @@ El sistema cuenta con un conmutador de tema visual accesible tanto desde la barr
 5. **Paleta Industrial Adaptativa:**
    - **Modo Oscuro (por defecto):** Fondos `slate-950` y `slate-900`, tarjetas industriales con bordes sutiles `slate-800` y acentos naranja `orange-500`.
    - **Modo Claro:** Fondos suaves `bg-slate-50` / `bg-white`, tarjetas de contraste óptimo con bordes `border-slate-200`, sombras suaves y tipografía de alta legibilidad sin pérdida de acentos corporativos AZA.
+
+---
+
+## 13. Flujo de Observaciones y Aprobación (v10)
+
+A partir de la v10, el módulo de observaciones implementa un flujo de validación bidireccional entre roles, motivado por el feedback de los representantes de Aceros AZA.
+
+### Arquitectura del Flujo
+
+**Rol Operador — Creación de Observaciones:**
+- El panel **"Observaciones de la Inspección"** aparece debajo del medidor de tolerancia en la Vista Operador.
+- El Operador puede redactar y enviar una observación directamente desde su vista mediante un formulario con `textarea` y botón **"Enviar Observación"**.
+- Toda observación creada por el Operador se persiste con `estado = 'pendiente'` hasta que el Supervisor la revise.
+- El endpoint `GET /api/observaciones/por-inspeccion/:id_inspeccion` (cualquier rol autenticado) permite al Operador consultar las observaciones asociadas a su inspección activa.
+
+**Rol Supervisor — Revisión y Aprobación:**
+- La vista de observaciones del Supervisor presenta una **lista vertical de una sola columna** (rediseño solicitado por el cliente para mejorar la lectura cronológica; reemplaza la cuadrícula de 2 columnas anterior).
+- Se dispone de filtros por estado: **Todas / Pendientes / Aprobadas / Rechazadas**, con contadores en tiempo real.
+- Cada observación en estado `pendiente` muestra botones de acción: **"Aprobar"** (verde) y **"Rechazar"** (rojo).
+- El endpoint `PUT /api/observaciones/:id/estado` está protegido por RBAC (solo roles `Supervisor` y `Administrador`).
+
+### Comportamiento del Sistema
+
+| Aspecto | Detalle |
+|---|---|
+| **Persistencia del estado** | Campo `estado` en tabla `OBSERVACION` (TEXT, DEFAULT `'pendiente'`, CHECK IN (`'pendiente'`, `'aprobada'`, `'rechazada'`)). |
+| **Inmutabilidad** | Las observaciones siguen siendo append-only. Solo el campo `estado` es modificable por el Supervisor. |
+| **Sincronización** | El flujo es asíncrono (no en tiempo real por WebSocket). El Supervisor visualiza las observaciones nuevas al ingresar o recargar la pestaña correspondiente. |
+| **Control de acceso** | El endpoint de aprobación/rechazo está protegido por RBAC; el de consulta por inspección es accesible a cualquier rol autenticado. |
+
+### Cambios Adicionales de la v10
+
+- **Limpieza visual corporativa:** Se eliminaron los badges técnicos internos (`CU1`, `RF06`, `RBAC`, `SQLite 3`, `Power BI Engine`, etc.) de toda la interfaz, resultando en un diseño 100% orientado al usuario final.
+- **Corrección de bug React:** Se resolvió el error *Invalid hook call* (múltiples instancias de React) mediante la configuración de `resolve.dedupe: ['react', 'react-dom']` en `vite.config.js`.
 
 ---
 
