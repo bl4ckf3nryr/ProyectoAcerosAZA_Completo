@@ -3,7 +3,7 @@
 **Proyecto Integrado de Titulación / Ingeniería de Software**  
 **Empresa Patrocinante:** Aceros AZA S.A.  
 **Institución:** INACAP  
-**Equipo de Desarrollo:** Lancelot Castro  
+**Equipo de Desarrollo:** Lancelot Castro 
 **Estado:** Funcional / Listo para Despliegue (Local y PaaS)  
 **Lenguaje y Plataforma:** JavaScript Puro (ESM / Node.js 20+ / React 19) — *Sin TypeScript*
 
@@ -28,7 +28,9 @@ Este repositorio contiene el historial completo de la evolución del sistema, de
 - **`v6` (Gobierno y RBAC):** Creación del Panel de Administración exclusivo (Gestión de Recetas, Usuarios y Explorador de BD).
 - **`v7` a `v8` (UX/UI):** Implementación y posterior corrección integral del sistema de temas Claro/Oscuro, solucionando problemas de contraste.
 - **`v9` (Capa de Defensa en Profundidad):** Sanitización y enmascaramiento del campo `password_hash` en el Explorador de BD.
-- **`v10` (Feedback del Cliente):** Se agregó el flujo de aprobación/rechazo de observaciones y el formulario de creación para Operadores, además de la limpieza visual de la interfaz. **Esta es la versión desplegada en la nube para la evaluación ES3.**
+- **`v10` (Feedback del Cliente):** Se agregó el flujo de aprobación/rechazo de observaciones y el formulario de creación para Operadores, además de la limpieza visual de la interfaz.
+- **`v11` (Auditoría y Exportación):** Implementación de la tabla AUDITORIA (9na tabla) para registrar acciones CRUD. Se agregó exportación a CSV (compatible con Excel mediante BOM UTF-8) exclusiva para el Administrador.
+- **`v12` (Control de Acceso Avanzado):** Implementación de `AccessDeniedView.jsx` (pantalla completa de Error 403 para rutas protegidas) y `ForbiddenToast.jsx` (notificación flotante para APIs bloqueadas). Interceptor global `apiFetch` en React. **Esta es la versión desplegada en la nube para la evaluación ES3.**
 
 ---
 
@@ -45,7 +47,7 @@ Este repositorio contiene el historial completo de la evolución del sistema, de
 
 ---
 
-## 3. Modelo de Datos Relacional (DER) — 8 Tablas
+## 3. Modelo de Datos Relacional (DER) — 9 Tablas
 
 El esquema relacional implementado en `trefilado.db` cumple rigurosamente con la normalización de datos y los índices requeridos:
 
@@ -58,6 +60,9 @@ El esquema relacional implementado en `trefilado.db` cumple rigurosamente con la
                                                                  ▲
                                                                  │ (N:1)
 [ROL] (1:N) ──────────────────────────────────────────────> [USUARIO]
+                                                                 │
+                                                                 │ (1:N)
+                                                            [AUDITORIA]
 ```
 
 ### Detalle de Entidades
@@ -70,6 +75,7 @@ El esquema relacional implementado en `trefilado.db` cumple rigurosamente con la
 6. **`RECETA`**: Parámetros de tolerancia (`limite_minimo`, `limite_maximo`), `vigente_desde`, `vigente_hasta`. Restricción `CHECK (limite_minimo < limite_maximo)`. Versionado temporal inmutable.
 7. **`INSPECCION`**: Medición de ángulo (`angulo` REAL), `estado` (`aprobado`, `rechazado`, `sin receta`). **Campo calculado y almacenado en inserción, inmutable (sin UPDATE ni DELETE)**.
 8. **`OBSERVACION`**: Bitácora técnica anexable (`texto`, `fecha_hora`, FK `id_inspeccion`, FK `id_usuario`, `estado` TEXT DEFAULT `'pendiente'` CHECK IN (`'pendiente'`, `'aprobada'`, `'rechazada'`)). **Append-only (solo se agregan, nunca se modifican ni eliminan)**. El campo `estado` permite el flujo de validación por parte del Supervisor.
+9. **`AUDITORIA`**: Registro inmutable de acciones CRUD (`id`, `usuario_id`, `accion`, `tabla_afectada`, `registro_id`, `detalles`, `fecha_hora`). FK a `USUARIO`.
 
 ### Índices de Rendimiento Creados:
 - `idx_inspeccion_fecha_lote`: Índice compuesto `(fecha_hora, id_lote)` en `INSPECCION`.
@@ -91,6 +97,7 @@ El esquema relacional implementado en `trefilado.db` cumple rigurosamente con la
 | **CU6** | Registrar y Aprobar Observación | Flujo bidireccional: el Operador crea observaciones desde su vista (estado `pendiente`); el Supervisor las revisa y ejecuta la aprobación o rechazo mediante `PUT /api/observaciones/:id/estado`. Registro append-only. |
 | **CU7** | Gestionar Recetas | CRUD con validación `mínimo < máximo`, versionado temporal (`vigente_hasta = now`). |
 | **CU8** | Gestionar Usuarios | CRUD con validación de RUT chileno en JS, roles únicos y toggle de habilitación/desbloqueo. |
+| **CU9** | Auditoría de Acciones | Registro automático en tabla AUDITORIA y exportación a CSV con BOM UTF-8 | Admin |
 | **RNF01** | Autenticación JWT + Bcrypt | Tokens firmados con rol embebido en payload; contraseñas con salt round 10. |
 | **RNF02** | Disponibilidad Remota PaaS | Despliegue en contenedor PaaS con puerto 3000 y persistencia local de SQLite. |
 | **RNF03** | Tiempo de Respuesta &lt; 3s | Tiempos de respuesta medidos entre 1 y 12 ms con 2.000 inspecciones gracias a índices compuestos. |
@@ -206,7 +213,7 @@ En conformidad con las buenas prácticas de ingeniería y la rúbrica de evaluac
 ## 9. Explorador de Base de Datos Embebido (Exclusivo Administrador)
 
 Ubicado en la pestaña **"Explorador BD"**, este módulo proporciona una interfaz web equivalente a **DB Browser for SQLite**:
-- **Catálogo de tablas:** Muestra las 8 tablas con el número exacto de filas y el tamaño en disco del archivo `trefilado.db`.
+- **Catálogo de tablas:** Muestra las 9 tablas con el número exacto de filas y el tamaño en disco del archivo `trefilado.db`.
 - **Estructura y Claves:** Muestra la definición de cada columna (`INTEGER`, `REAL`, `TEXT`), marcas `PRIMARY KEY`, `NOT NULL`, relaciones `FOREIGN KEY` y definición de índices.
 - **Visualizador de filas:** Tabla interactiva con paginación de registros reales.
 - **Consola SQL Segura:** Permite escribir y ejecutar consultas `SELECT` directas con medición de tiempo de ejecución en milisegundos, limitación automática a 100 filas y bloqueo estricto de cualquier comando destructivo (`INSERT`, `UPDATE`, `DELETE`, `DROP`).
@@ -248,11 +255,12 @@ Para optimizar la experiencia de usuario y estructurar la gestión de planta con
 - **Contenedor con Pestañas (`AdminPanelView.jsx`):**
   1. **Pestaña 1 — Gestión de Recetas (`CU7`):** Configuración de tolerancias mínimas y máximas (`min < max`), versionado temporal inmutable por vigencia (`vigente_hasta`).
   2. **Pestaña 2 — Gestión de Usuarios (`CU8`):** Control RBAC, validación de RUT chileno con algoritmo Módulo 11 en JavaScript, alta/edición de credenciales y desbloqueo tras bloqueo de 3 intentos fallidos.
-  3. **Pestaña 3 — Explorador de Base de Datos (SQLite):** Catálogo de las 8 tablas, visualizador de esquema con claves foráneas, paginación de filas y consola SQL segura (bloqueo estricto de comandos destructivos).
+  3. **Pestaña 3 — Explorador de Base de Datos (SQLite):** Catálogo de las 9 tablas, visualizador de esquema con claves foráneas, paginación de filas y consola SQL segura (bloqueo estricto de comandos destructivos).
+  4. **Botón 4 — Descargar Informe de Auditoría:** Exporta la bitácora de acciones del sistema en formato CSV.
 
 ### Control de Acceso y Enrutamiento Protegido
 - **Redirección Post-Login:** Al iniciar sesión con credenciales de `Administrador`, el sistema redirige automáticamente al **Panel de Administración** (`/admin`).
-- **Protección de Ruta:** Si un usuario con rol de `Operador` o `Supervisor` intenta acceder a `/admin`, el enrutador activa la pantalla de **Acceso Denegado (HTTP 403)** con explicación de privilegios y botón de retorno a su vista correspondiente.
+- **Protección de Ruta:** Si un usuario no autorizado intenta acceder a `/admin`, el frontend renderiza `AccessDeniedView` (HTTP 403) en lugar de redirigir silenciosamente. Además, si intenta consumir un endpoint protegido, el backend retorna HTTP 403 y el interceptor global dispara un `ForbiddenToast` informando del bloqueo.
 
 ---
 
@@ -307,5 +315,18 @@ A partir de la v10, el módulo de observaciones implementa un flujo de validaci�
 
 ---
 
+## 14. Suite de Pruebas Automatizadas
+
+El proyecto cuenta con **42 pruebas automatizadas** ejecutadas sobre Node.js puro (sin frameworks externos), que cubren los módulos de autenticación, inspecciones, observaciones, recetas, usuarios, auditoría y el manejo de errores HTTP 403:
+
+```bash
+npm test
+# node tests/api.test.js
+```
+
+Las pruebas validan de extremo a extremo los flujos críticos del sistema: autenticación con JWT, bloqueo por intentos fallidos, registro y consulta de inspecciones, flujo de observaciones pendientes/aprobadas/rechazadas, control RBAC en cada endpoint protegido, registro en la tabla AUDITORIA ante operaciones CRUD y el retorno correcto de HTTP 403 para accesos no autorizados.
+
+---
+
 **Aceros AZA S.A. — INACAP 2026**  
-*Lancelot Castro*
+*Rodrigo Mancilla, Lancelot Castro*
